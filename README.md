@@ -2,7 +2,7 @@ Setup
 =====
 
 1) Run "make" from terminal to initialize.<br>
-2) Run "./server "port#" "option#" to use.
+2) Run " ./server 'port#' 'option#' " to use.
 
 Details
 =====
