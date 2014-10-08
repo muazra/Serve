@@ -1,12 +1,7 @@
-Serve
-=====
-
-A simple Web-server written for the Linux kernel.
-
 Setup
 =====
 
-1) Run "make" from terminal to initialize. 
+1) Run "make" from terminal to initialize.<br>
 2) Run "./server <port> <option>" to use.
 
 Details
