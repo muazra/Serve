@@ -14,9 +14,9 @@ Details
 
 Options available for <option> in Setup:
 
-"0": serve only a single request\n
-"1": use only a single thread for multiple requests\n
-"2": use fork to create process for each request\n
-"4": create new thread for each request\n
-"5": use atomic instructions to implement task queue\n
-"6": use a thread pool to serve requests (in progress)\n
+"0": serve only a single request <br>
+"1": use only a single thread for multiple requests <br>
+"2": use fork to create process for each request <br>
+"4": create new thread for each request <br>
+"5": use atomic instructions to implement task queue <br>
+"6": use a thread pool to serve requests (in progress) <br>
