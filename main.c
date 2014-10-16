@@ -32,6 +32,9 @@
 #include <assert.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <util.h> 		/* client_process */
 #include <server.h>		/* server_accept and server_create */
@@ -39,7 +42,7 @@
 #include <cas.h>
 
 #define MAX_DATA_SZ 1024
-#define MAX_CONCURRENCY 256
+#define MAX_CONCURRENCY 5
 
 /* 
  * This is the function for handling a _single_ request.  Understand
@@ -193,7 +196,7 @@ server_task_queue(int accept_fd)
   //create max threads
   while(temp < MAX_CONCURRENCY){
     if(pthread_create(&thread, NULL, &worker1, NULL)){
-	 exit(0);
+	   exit(0);
     }
     temp++;
   }
@@ -274,6 +277,48 @@ server_thread_pool(int accept_fd)
 	return;
 }
 
+
+/*
+ *Serving requests via
+ *char device 
+*/
+
+//function declarations and global vars
+void* worker2(void*);
+int chardev_fd;
+
+void 
+server_char_device_queue(int accept_fd)
+{
+  int fd, i;
+  pthread_t thread[MAX_CONCURRENCY];
+
+  chardev_fd = open("/dev/muaz", O_RDWR);
+
+  for(i = 0; i < MAX_CONCURRENCY; i++){
+    if(pthread_create(&thread[i], NULL, worker2, NULL))
+      exit(0);
+  }
+
+  while(1){
+    fd = server_accept(accept_fd);
+    write(chardev_fd, (void*)&fd, sizeof(int));
+  }
+
+  pthread_exit(NULL);
+  return;
+}
+
+void* worker2(void* arg){
+  while(1){
+    int fd;
+    while(read(chardev_fd, (void*)&fd, sizeof(int)) == 0);
+    client_process(fd);
+    close(fd);
+  }
+  pthread_exit(NULL);
+} 
+
 typedef enum {
 	SERVER_TYPE_ONE = 0,
 	SERVER_TYPE_SINGLET = 1,
@@ -282,6 +327,7 @@ typedef enum {
 	SERVER_TYPE_SPAWN_THREAD = 4,
 	SERVER_TYPE_TASK_QUEUE = 5,
 	SERVER_TYPE_THREAD_POOL,
+	SERVER_TYPE_CHAR_DEVICE_QUEUE = 8,
 } server_type_t;
 
 int
@@ -302,7 +348,7 @@ main(int argc, char *argv[])
 		       "5: use atomic instructions to implement a task queue\n"
 		       "6: use a thread pool\n"
 		       "7: to be defined\n"
-		       "8: to be defined\n"
+		       "8: use a queue implemented in a char device\n"
 		       "9: to be defined\n",
 		       argv[0]);
 		return -1;
@@ -336,8 +382,11 @@ main(int argc, char *argv[])
 	case SERVER_TYPE_THREAD_POOL:
 		server_thread_pool(accept_fd);
 		break;
+	case SERVER_TYPE_CHAR_DEVICE_QUEUE:
+	        server_char_device_queue(accept_fd);
+                break;
 	}
-	close(accept_fd);
-
+	
+        close(accept_fd);
 	return 0;
 }

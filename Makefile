@@ -12,3 +12,6 @@ $(BIN): $(OBJS)
 
 clean:
 	rm $(BIN) $(OBJS)
+
+device:
+	mknod /dev/muaz c 253 0
