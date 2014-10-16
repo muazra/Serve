@@ -14,4 +14,5 @@ Options available for "option#" in Setup:
 "2": use fork to create process for each request <br>
 "4": create new thread for each request <br>
 "5": use atomic instructions to implement task queue <br>
-"6": use a thread pool to serve requests (in progress) <br>
+"6": use a thread pool to serve requests <br>
+"7": serve requests using char device - done in kernel mode <br>
