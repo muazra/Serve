@@ -40,9 +40,10 @@
 #include <server.h>		/* server_accept and server_create */
 
 #include <cas.h>
+#include <ring.h>
 
 #define MAX_DATA_SZ 1024
-#define MAX_CONCURRENCY 5
+#define MAX_CONCURRENCY 16
 
 /* 
  * This is the function for handling a _single_ request.  Understand
@@ -271,11 +272,127 @@ struct request *get_request(void){
   return temp;
 }
 
+/*
+ *Serving requests via
+ *thread pool using mutex
+ */
+
+struct list{
+  int fd;
+  struct list *next;
+};
+
+struct list *head;
+pthread_mutex_t lock;
+void* worker3(void*);
+
 void
 server_thread_pool(int accept_fd)
 {
-	return;
+  int fd, i;
+  pthread_t thread[MAX_CONCURRENCY];
+  
+  pthread_mutex_init(&lock, NULL);
+
+  head = (struct list*) malloc(sizeof(struct list));
+  head->fd = NULL;
+  head->next = NULL;
+
+  for(i = 0; i < MAX_CONCURRENCY; i++){
+    if(pthread_create(&thread[i], NULL, worker3, NULL))
+      exit(0);
+  }
+  
+  while(1){
+    fd = server_accept(accept_fd);
+    pthread_mutex_lock(&lock);
+    struct list *node = (struct list*) malloc(sizeof(struct list));
+    node->fd = fd;
+    node->next = head;
+    head = node;
+    pthread_mutex_unlock(&lock);
+  }
+  
+  pthread_exit(NULL);
+  return;
 }
+
+void* worker3(void* arg){
+  while(1){
+    pthread_mutex_lock(&lock);
+    while((head == NULL)||( head->fd == NULL)) {
+      pthread_mutex_unlock(&lock);
+      continue;
+    }
+    client_process(head->fd);
+    struct list *temp = head;
+    head = head->next;
+    free(temp);
+    pthread_mutex_unlock(&lock);
+  }
+
+  pthread_exit(NULL);
+} 
+
+/*
+ *Create thread pool
+ *using condiiton variables.
+ */
+
+void* worker4(void*);
+struct ring *rbuffer;
+pthread_mutex_t count_lock;
+pthread_cond_t thread_cond[2];
+
+void 
+server_thread_pool_blocking(int accept_fd)
+{
+  int fd, i;
+  pthread_t thread[MAX_CONCURRENCY];
+  pthread_mutex_init(&count_lock, NULL);
+  rbuffer = rb_create();
+
+  for(i = 0; i < MAX_CONCURRENCY; i++){
+    pthread_create(&thread[i], NULL, worker4, (void*)&i);
+  }
+  
+  pthread_cond_init(&thread_cond[0], NULL);
+  pthread_cond_init(&thread_cond[1], NULL);
+
+  while(1){
+     fd = server_accept(accept_fd);
+     pthread_mutex_lock(&count_lock);
+
+     while(rb_isfull(rbuffer) == -1){
+       pthread_cond_wait(&thread_cond[1], &count_lock);
+     }
+
+     rb_enqueue(rbuffer, (void*)&fd);
+     pthread_cond_signal(&thread_cond[0]);
+
+     pthread_mutex_unlock(&count_lock);
+  }
+    
+  pthread_exit(NULL);
+  return;
+}
+
+void* worker4(void* arg){
+  while(1){
+    pthread_mutex_lock(&count_lock);
+
+    while(rb_isempty(rbuffer) == -1){
+      pthread_cond_wait(&thread_cond[0], &count_lock);
+    }
+
+    void *value = rb_dequeue(rbuffer);
+    client_process(*(int*)value);
+    pthread_cond_signal(&thread_cond[1]);
+
+    pthread_mutex_unlock(&count_lock);
+  }
+  pthread_exit(NULL);
+} 
 
 
 /*
@@ -326,7 +443,8 @@ typedef enum {
 	SERVER_TYPE_FORK_EXEC,
 	SERVER_TYPE_SPAWN_THREAD = 4,
 	SERVER_TYPE_TASK_QUEUE = 5,
-	SERVER_TYPE_THREAD_POOL,
+	SERVER_TYPE_THREAD_POOL = 6,
+	SERVER_TYPE_THREAD_POOL_BLOCKING = 7,
 	SERVER_TYPE_CHAR_DEVICE_QUEUE = 8,
 } server_type_t;
 
@@ -346,8 +464,8 @@ main(int argc, char *argv[])
 		       "3: Extra Credit: use fork and exec when the path is an executable to run the program dynamically.  This is how web servers handle dynamic (program generated) content.\n"
 		       "4: create a thread for each request\n"
 		       "5: use atomic instructions to implement a task queue\n"
-		       "6: use a thread pool\n"
-		       "7: to be defined\n"
+		       "6: use a thread pool with mutex only\n"
+		       "7: use a thread pool with condition variables\n"
 		       "8: use a queue implemented in a char device\n"
 		       "9: to be defined\n",
 		       argv[0]);
@@ -381,6 +499,9 @@ main(int argc, char *argv[])
 		break;
 	case SERVER_TYPE_THREAD_POOL:
 		server_thread_pool(accept_fd);
+		break;
+	case SERVER_TYPE_THREAD_POOL_BLOCKING:
+	        server_thread_pool_blocking(accept_fd);
 		break;
 	case SERVER_TYPE_CHAR_DEVICE_QUEUE:
 	        server_char_device_queue(accept_fd);
