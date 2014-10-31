@@ -7,7 +7,7 @@ Setup
 Details
 =====
 
-Options available for "option#" in Setup:
+Request Types:
 
 0: serve only a single request <br>
 1: use only a single thread for multiple requests <br>
